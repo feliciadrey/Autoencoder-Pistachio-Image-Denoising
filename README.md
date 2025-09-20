@@ -1,96 +1,103 @@
-# Autoencoder Image Denoising = Pistachio Dataset
+# Pistachio Image Processing: Autoencoder & GAN
 
-Convolutional autoencoder to denoise pistachio images (100×100). Includes EDA, noise injection, baseline & modified autoencoders, and SSIM-based evaluation.
+This repository applies **two deep learning techniques** on the same pistachio dataset (1,074 RGB images, resized to 100×100):
 
+* **Autoencoder** → Image Denoising
+* **Generative Adversarial Networks (GANs)** → Image Generation
 
-## Project Overview
-
-This project builds convolutional autoencoders to **denoise images** of pistachios. Because the original dataset lacks noisy examples, synthetic Gaussian noise (mean=0.0, std=0.1) is added to create noisy inputs; the autoencoder learns to reconstruct clean images from noisy inputs.
-
-Task objective: given a noisy 100×100 RGB image, reconstruct the clean image as closely as possible (measured with SSIM and MSE).
-
-
-## Key Results
-
-* **Dataset:** 1,074 RGB images resized to 100×100.
-* **Train/Val/Test split:** 80% / 10% / 10% → `Train=859`, `Val=107`, `Test=108`.
-* **Noisy vs Clean SSIM (before denoising):** average SSIM ≈ **0.22** (noisy images are substantially degraded).
-* **Baseline autoencoder SSIM (test):** **\~0.9530**
-* **Modified autoencoder SSIM (test):** **\~0.9575**
-
-The modified (deeper + batch-norm) autoencoder achieves a small but consistent improvement in SSIM over the baseline.
+Together, these projects illustrate complementary applications: **denoising** improves image fidelity, while **GANs** expand data diversity.
 
 ---
 
 ## Dataset
 
-* Provided via Google Drive link (downloaded with `gdown` in the notebook). The notebook expects a folder like `/content/dataset/A_23/*.jpg` after extraction.
-* Images are read with OpenCV, converted BGR→RGB, resized to **100×100**, and normalized to `[0,1]`.
-* Example shape used in the notebook: `(1074, 100, 100, 3)`.
+* **Source**: Pistachio image dataset provided via Google Drive link.
+* **Format**: 1,074 RGB images → resized to **100×100**, normalized to `[0,1]`.
+* **Splits**: Train 80% (859), Validation 10% (107), Test 10% (108).
+* **Notes**: Dataset used consistently for both Autoencoder and GAN tasks.
 
 ---
 
+## Part 1: Autoencoder for Image Denoising
 
-## Exploratory Data Analysis (EDA) — summary
+### Overview
 
-EDA steps performed in the notebook:
+A convolutional autoencoder is trained to reconstruct clean pistachio images from artificially noised versions. Gaussian noise (`mean=0.0, std=0.1`) is added to simulate corruption.
 
-* Displayed sample images to inspect object location, cropping, and background consistency.
-* Edge detection (Canny) applied to samples to observe contour clarity of pistachio objects.
-* Plotted average per-channel color histograms to identify dominant pixel-value ranges.
-* Computed per-channel mean and standard deviation.
+**Task Objective:** Given a noisy input image, reconstruct the clean image.
 
-**Key EDA takeaways:**
+### Exploratory Data Analysis (EDA)
 
-* Background is consistently dark which simplifies foreground extraction.
-* Pistachio objects vary in pose and cropping, but contours are usually well-defined — promising for shape-preserving denoising.
-* Pixel value histograms show brighter pixel modes for object regions and dark for backgrounds; normalization to `[0,1]` is appropriate.
+* Sample visualization to inspect background consistency and object cropping.
+* Edge detection (Canny) confirms well-defined pistachio contours.
+* Color histograms show distinct modes for foreground vs background.
+* Conclusion: Dataset is clean and well-suited for denoising tasks.
 
----
+### Architectures
 
-## Preprocessing & Noise Generation
+**Baseline Autoencoder**
 
-* Train/val/test split: `train_test_split` from scikit-learn with `random_state=123`.
-* Gaussian noise injection function used: `mean=0.0`, `std=0.1` → noisy images clipped to `[0,1]`.
-* SSIM between noisy and clean images was calculated to quantify degradation prior to training.
-
----
-
-## Modeling
-
-### Baseline autoencoder
-
-* Input: `100×100×3` RGB image.
 * Encoder: `Conv2D(32)->MaxPool`, `Conv2D(64)->MaxPool`, `Conv2D(64)`
-* Decoder: `UpSampling->Conv2D(32)->UpSampling->Conv2D(3, activation='sigmoid')`
-* Loss: MSE; Optimizer: `Adam()` (default LR)
-* Trained: up to 100 epochs (notebook run) with validation monitoring.
+* Decoder: `UpSampling->Conv2D(32)->UpSampling->Conv2D(3, sigmoid)`
+* Loss: MSE; Optimizer: Adam (default LR)
 
-### Modified autoencoder
+**Modified Autoencoder**
 
-* Deeper encoder with larger filters and BatchNormalization:
+* Deeper encoder with BatchNorm layers
+* Encoder: `Conv2D(64)->BatchNorm->MaxPool`, `Conv2D(128)->BatchNorm->MaxPool`, `Conv2D(256)`
+* Decoder: mirrors encoder with upsampling + fewer filters
+* Loss: MSE; Optimizer: Adam(lr=0.001)
 
-  * `Conv2D(64)->BatchNorm->MaxPool`
-  * `Conv2D(128)->BatchNorm->MaxPool`
-  * `Conv2D(256)` (latent)
-* Decoder mirrors encoder with upsampling and progressively fewer filters: `128->64->decoded (3-channel sigmoid)`.
-* Optimizer: `Adam(learning_rate=0.001)`; Loss: MSE
-* Trained similarly (100 epochs in the notebook) and validated.
+### Key Results
 
-Design rationale: the modified model increases representational capacity and stabilizes training via batch normalization, yielding modest improvements in reconstruction quality.
+* Noisy vs Clean SSIM (before denoising): **0.22**
+* Baseline Autoencoder SSIM: **\~0.9530**
+* Modified Autoencoder SSIM: **\~0.9575**
+
+**Interpretation:** Both models achieve high-fidelity reconstructions (>0.95 SSIM). The modified version shows a modest improvement.
 
 ---
 
-## Evaluation
+## Part 2: GAN for Pistachio Image Generation
 
-Metrics used:
+### Overview
 
-* **MSE loss** during training/validation (used for optimization)
-* **SSIM (Structural Similarity Index)** between original clean images and reconstructed outputs — reported on test set
+A Generative Adversarial Network (GAN) is trained to generate new pistachio images from random noise. Models are evaluated with the **Fréchet Inception Distance (FID)**.
 
-Observed scores (notebook):
+**Task Objective:** Generate new, realistic pistachio images that match the real distribution.
 
-* Baseline SSIM ≈ **0.9530**
-* Modified SSIM ≈ **0.9575**
+### Architectures
 
-**Interpretation:** both models produce high-fidelity reconstructions (SSIM > 0.95), with the modified autoencoder showing a small numeric improvement. Given the high SSIM for both, further improvements may require perceptual losses (e.g., VGG perceptual loss), adversarial training, or attention mechanisms if higher visual fidelity or sharper details are required.
+**Baseline GAN**
+
+* Generator: Dense → Reshape → Conv2D (64, 32, 16, ReLU) → Conv2D(3, tanh)
+* Discriminator: Conv2D (16, 32, 64, ReLU) → Flatten → Dense (sigmoid)
+* Optimizer: Adam(lr=1e-4)
+
+**Modified GAN**
+
+* Generator: Deeper filters (128→64→32) with BatchNorm + ReLU
+* Discriminator: LeakyReLU, Dropout, `padding='same'`
+* Optimizer: Adam(lr=2e-4, β1=0.5)
+
+### Key Results
+
+* Baseline GAN FID: **239.83**
+* Modified GAN FID: **180.84**
+
+**Visual Inspection:**
+
+* Baseline: blurrier, less structured.
+* Modified: sharper, smoother, more realistic.
+
+---
+
+## Evaluation Metrics
+
+* **Autoencoder**: SSIM, MSE
+* **GAN**: Fréchet Inception Distance (FID)
+
+Both tasks are complementary:
+
+* Autoencoder → Enhances input quality (denoising)
+* GAN → Expands dataset with synthetic samples
